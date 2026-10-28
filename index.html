@@ -19,6 +19,7 @@
     .field.range { gap: 14px; }
     .field output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
     input[type="range"] { width: 100%; }
+    .field select { flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid #d1d5db; border-radius: 8px; background: white; color: inherit; font: inherit; }
     .qr-wrap { display: grid; place-items: center; padding: 18px; border: 1px dashed #e5e7eb; border-radius: 16px; margin-top: 16px; }
     #qrcode { display: grid; place-items: center; width: 100%; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -53,6 +54,18 @@
         </div>
       </div>
 
+      <div class="row" style="margin-top:10px">
+        <div class="field">
+          <label for="errorCorrection">Error correction</label>
+          <select id="errorCorrection">
+            <option value="L">Low (L) — ~7%</option>
+            <option value="M" selected>Medium (M) — ~15%</option>
+            <option value="Q">Quartile (Q) — ~25%</option>
+            <option value="H">High (H) — ~30%</option>
+          </select>
+        </div>
+      </div>
+
       <div class="qr-wrap">
         <div id="qrcode" aria-label="QR code output" role="img"></div>
       </div>
@@ -76,6 +89,7 @@
       const colorLightEl = $('#colorLight');
       const roundedEl = $('#rounded');
       const roundedOut = $('#roundedOut');
+      const errorCorrectionEl = $('#errorCorrection');
 
       const dlBtn = $('#download');
       const copyImgBtn = $('#copyimg');
@@ -86,14 +100,16 @@
       let lastText = '';
       let lastColors = { dark: '', light: '' };
       let lastRounded = -1;
+      let lastCorrectLevel = '';
 
-      // Load from query string: ?u=...&cd=#hex&cl=#hex&rs=0..50
+      // Load from query string: ?u=...&cd=#hex&cl=#hex&rs=0..50&ec=L|M|Q|H
       (function readParams() {
         const params = new URL(location.href).searchParams;
         const qUrl = params.get('u');
         const qCd = params.get('cd');
         const qCl = params.get('cl');
         const qRs = params.get('rs');
+        const qEc = params.get('ec');
 
         if (qUrl) inputEl.value = decodeURIComponent(qUrl);
         if (qCd) colorDarkEl.value = qCd;
@@ -101,6 +117,9 @@
         if (qRs && !Number.isNaN(parseInt(qRs, 10))) {
           const v = Math.max(0, Math.min(50, parseInt(qRs, 10)));
           roundedEl.value = String(v);
+        }
+        if (qEc && ['L', 'M', 'Q', 'H'].includes(qEc.toUpperCase())) {
+          errorCorrectionEl.value = qEc.toUpperCase();
         }
         roundedOut.textContent = roundedEl.value + '%';
       })();
@@ -133,16 +152,17 @@
         const colorDark = colorDarkEl.value || '#000000';
         const colorLight = colorLightEl.value || '#ffffff';
         const roundedPct = Math.max(0, Math.min(50, parseInt(roundedEl.value || '25', 10)));
+        const correctLevel = errorCorrectionEl.value;
 
-        if (!text) { holder.innerHTML = ''; lastText = ''; lastColors = { dark: '', light: '' }; lastRounded = -1; return; }
-        if (text === lastText && colorDark === lastColors.dark && colorLight === lastColors.light && roundedPct === lastRounded) return;
+        if (!text) { holder.innerHTML = ''; lastText = ''; lastColors = { dark: '', light: '' }; lastRounded = -1; lastCorrectLevel = ''; return; }
+        if (text === lastText && colorDark === lastColors.dark && colorLight === lastColors.light && roundedPct === lastRounded && correctLevel === lastCorrectLevel) return;
 
-        lastText = text; lastColors = { dark: colorDark, light: colorLight }; lastRounded = roundedPct;
+        lastText = text; lastColors = { dark: colorDark, light: colorLight }; lastRounded = roundedPct; lastCorrectLevel = correctLevel;
         holder.innerHTML = '';
 
         // Encode only
         const qr = new QRCode(document.createElement('div'), {
-          text, width: 256, height: 256, colorDark, colorLight, correctLevel: QRCode.CorrectLevel.M
+          text, width: 256, height: 256, colorDark, colorLight, correctLevel: QRCode.CorrectLevel[correctLevel]
         })._oQRCode;
         const n = qr.getModuleCount();
 
@@ -240,6 +260,7 @@
         roundedOut.textContent = roundedEl.value + '%';
         lastText = ''; makeQR();
       });
+      errorCorrectionEl.addEventListener('change', makeQR);
 
       makeQR();
 
@@ -327,6 +348,7 @@
         if (cd) qs.push('cd=' + encodeURIComponent(cd));
         if (cl) qs.push('cl=' + encodeURIComponent(cl));
         qs.push('rs=' + rs);
+        qs.push('ec=' + encodeURIComponent(errorCorrectionEl.value));
         url.search = qs.length ? '?' + qs.join('&') : '';
         return url.toString();
       }
